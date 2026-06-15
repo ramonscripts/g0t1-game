@@ -1,0 +1,10 @@
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+*.swp
+
+# Node (caso adicione tooling no futuro)
+node_modules/

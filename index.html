@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>G0T1 — Monte seu Jogo do Ano</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="scanlines" aria-hidden="true"></div>
+
+<div class="app">
+
+  <!-- ===================== TELA 1: MENU ===================== -->
+  <section id="screen-menu" class="screen active">
+    <div class="menu-wrap">
+      <div class="logo">
+        <span class="logo-num">7</span><span class="logo-sep">×</span><span class="logo-num">0</span>
+        <span class="logo-sub">EDITION · GAME OF THE YEAR</span>
+      </div>
+      <h1 class="pixel-title">G0T1</h1>
+      <p class="subtitle">Game of the Year, montado por você</p>
+      <p class="tagline">Gire o sorteio: cai um jogo, e você escolhe qual qualidade dele herdar. Junte pedaços de clássicos e flops para forjar seu jogo — e dispute a Copa GOTY.</p>
+
+      <div class="mode-select">
+        <h3 class="block-label">Escolha o modo</h3>
+        <div id="mode-options" class="mode-options"></div>
+      </div>
+
+      <button id="btn-start" class="btn-primary btn-large" type="button">
+        Iniciar draft <i class="ti ti-arrow-right"></i>
+      </button>
+
+      <div class="rules-toggle">
+        <button id="btn-rules" class="link-btn" type="button"><i class="ti ti-info-circle"></i> Como funciona</button>
+      </div>
+
+      <div id="rules-box" class="rules-box hidden">
+        <h4>Como jogar</h4>
+        <ul>
+          <li>A cada rodada, <strong>1 jogo é sorteado</strong> de um catálogo grande de clássicos, medianos e flops.</li>
+          <li>Você escolhe <strong>UM atributo ainda vazio</strong> desse jogo para herdar (ex.: pegar os gráficos do Zelda).</li>
+          <li>Cada jogo tem <strong>notas diferentes por atributo</strong> — o Zelda tem mundo excelente mas online fraco.</li>
+          <li>Atributos já preenchidos ficam <strong>bloqueados</strong>: o jogo seguinte só preenche o que falta.</li>
+          <li>Você tem um número de <strong>giros para a partida inteira</strong> — cada vez que re-sortear o jogo, gasta um. Quando acabam, não há mais giros até o fim.</li>
+          <li>No fim, dá <strong>nome e temática</strong>. A temática que combina com suas escolhas dá <strong>bônus de afinidade</strong>.</li>
+          <li>Na <strong>Copa GOTY</strong>, você enfrenta rivais em quartas, semi e final — o placar é revelado aos poucos.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TELA 2: DRAFT ===================== -->
+  <section id="screen-draft" class="screen">
+    <div class="draft-header">
+      <div class="draft-progress">
+        <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+        <div id="progress-dots" class="progress-dots"></div>
+      </div>
+      <div class="draft-mode-badge" id="draft-mode-badge">Clássico</div>
+    </div>
+
+    <div class="draft-intro">
+      <span class="category-eyebrow" id="draft-eyebrow">Rodada 1</span>
+      <h2 id="draft-heading">Gire e herde um atributo</h2>
+      <p class="category-hint">Um jogo foi sorteado. Escolha qual qualidade dele entra no seu jogo.</p>
+    </div>
+
+    <div id="synergy-banner" class="synergy-banner hidden"></div>
+
+    <!-- jogo sorteado -->
+    <div id="rolled-card" class="rolled-card">
+      <div class="rolled-head">
+        <div>
+          <div class="rolled-name" id="rolled-name">—</div>
+          <div class="rolled-desc" id="rolled-desc"></div>
+          <div class="rolled-tags" id="rolled-tags"></div>
+        </div>
+        <button id="btn-reroll" class="btn-secondary" type="button"><i class="ti ti-dice"></i> <span id="reroll-text">Girar de novo</span></button>
+      </div>
+      <p class="rolled-prompt" id="rolled-prompt">Qual atributo deste jogo você quer herdar?</p>
+      <div id="attr-grid" class="attr-grid"></div>
+      <div id="next-bar" class="next-bar hidden">
+        <span id="next-confirm" class="next-confirm"></span>
+        <button id="btn-next" class="btn-primary" type="button">Próximo jogo <i class="ti ti-player-track-next"></i></button>
+      </div>
+    </div>
+
+    <!-- atributos já montados -->
+    <div class="built-section">
+      <h3 class="block-label">Seu jogo até agora</h3>
+      <div id="built-grid" class="built-grid"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TELA 3: IDENTIDADE ===================== -->
+  <section id="screen-identity" class="screen">
+    <div class="identity-wrap">
+      <span class="category-eyebrow">Quase lá</span>
+      <h2>Nome &amp; identidade</h2>
+      <p class="category-hint">Defina como seu jogo se apresenta. A temática certa turbina seu overall.</p>
+
+      <div class="form-group">
+        <label for="input-title">Nome do jogo</label>
+        <div class="input-with-action">
+          <input type="text" id="input-title" placeholder="Ex: Crônicas de Aurora" maxlength="40" autocomplete="off" spellcheck="false">
+          <button id="btn-suggest-title" class="btn-secondary" type="button"><i class="ti ti-dice"></i> Sugerir</button>
+        </div>
+        <div id="title-error" class="field-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Temática / gênero <span id="affinity-readout" class="affinity-readout"></span></label>
+        <div id="theme-grid" class="theme-grid"></div>
+        <div id="affinity-detail" class="affinity-detail"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="input-tagline">Slogan (opcional)</label>
+        <input type="text" id="input-tagline" placeholder="Ex: O fim é apenas o começo." maxlength="60" autocomplete="off">
+      </div>
+
+      <button id="btn-compete" class="btn-primary btn-large" type="button"><i class="ti ti-trophy"></i> Disputar a Copa GOTY</button>
+    </div>
+  </section>
+
+  <!-- ===================== TELA 4: RESULTADO ===================== -->
+  <section id="screen-result" class="screen">
+    <div class="result-wrap">
+      <div class="game-card">
+        <div class="game-card-header">
+          <span id="result-theme-badge" class="theme-badge"></span>
+          <div class="overall-pill"><i class="ti ti-star"></i><span id="result-overall">--</span></div>
+        </div>
+        <h2 id="result-title"></h2>
+        <p id="result-tagline" class="result-tagline"></p>
+      </div>
+
+      <div id="quality-grid" class="quality-grid"></div>
+      <div id="flags-list" class="flags-list"></div>
+
+      <h3 class="section-title">Cerimônia de Premiação</h3>
+
+      <div id="ceremony-controls" class="ceremony-controls">
+        <div class="speed-toggle">
+          <span class="speed-label">Ritmo:</span>
+          <button class="speed-btn" data-speed="slow" type="button"><i class="ti ti-walk"></i> Lento</button>
+          <button class="speed-btn active" data-speed="normal" type="button"><i class="ti ti-run"></i> Normal</button>
+          <button class="speed-btn" data-speed="fast" type="button"><i class="ti ti-bolt"></i> Rápido</button>
+        </div>
+        <button id="btn-skip" class="btn-secondary" type="button"><i class="ti ti-player-skip-forward"></i> Pular para o final</button>
+      </div>
+
+      <div id="ceremony-stage" class="ceremony-stage">
+        <div id="ceremony-narration" class="ceremony-narration"></div>
+      </div>
+
+      <h3 class="section-title" id="bracket-title" style="display:none">Copa GOTY</h3>
+      <div id="bracket" class="bracket"></div>
+
+      <div id="verdict-box" class="verdict-box hidden"></div>
+
+      <div class="result-actions">
+        <button id="btn-restart" class="btn-primary btn-large hidden" type="button"><i class="ti ti-refresh"></i> Montar outro jogo</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

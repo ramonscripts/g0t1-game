@@ -1,0 +1,17 @@
+# Configuração do Netlify para o G0T1
+# Coloque este arquivo na raiz do projeto (junto com index.html).
+
+[build]
+  publish = "."
+
+# Headers de segurança aplicados a todas as páginas
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    # CSP: só permite recursos do próprio site + as fontes/ícones usados.
+    # Nenhum script externo de terceiros é executado.
+    Content-Security-Policy = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; connect-src 'none'; base-uri 'self'; form-action 'none'"
