@@ -1,4 +1,4 @@
-# G0T1 — Game of the Year, montado por você
+# G0T1 — Game of the Year
 
 Jogo de navegador inspirado no "7 a 0". A cada rodada, um jogo é sorteado e
 você herda **um atributo** dele (gráficos, história, jogabilidade...). Monte
