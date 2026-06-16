@@ -1,87 +1,70 @@
-# G0T1 — Game of the Year, montado por você
+# G0T1 — Jornada ao Game of the Year
 
-Jogo de navegador. A cada rodada, um jogo é sorteado (indicados ao GOTY desde
-2016, clássicos, medianos e flops) e você **seleciona um atributo** dele
-(gráficos, história, jogabilidade...) e o **posiciona** na vaga correspondente
-do seu jogo, numa HUD de escalação interativa. Monte o jogo perfeito juntando
-pedaços de clássicos e flops, dê nome e temática, e encare a **Jornada ao
-GOTY**: cada categoria premia 1º, 2º e 3º lugar e dá pontos — só leva o Jogo
-do Ano quem dominar várias categorias.
+> Monte o jogo perfeito e dispute o título de Jogo do Ano.
 
-Modos: Clássico, De Almanaque (notas ocultas), Lendário (8 categorias, zero
-giros) e Estúdio Indie (só jogos indies; vença o Indie do Ano antes das
-categorias principais). Tem modo claro/escuro no botão do canto.
+**[Jogar agora](https://g0t1-game.vercel.app)** · Feito por [ramonscripts](https://github.com/ramonscripts)
 
-© Direitos Autorais de **ramonscripts** — todos os direitos reservados.
+---
 
-## Subir para o GitHub e fazer deploy no Vercel
+## O que é este jogo?
 
-```bash
-git init
-git add .
-git commit -m "feat: initial G0T1 webapp"
-git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/g0t1.git
-git push -u origin main
-```
+G0T1 é um jogo de navegador onde você constrói o seu próprio jogo do zero, herdando atributos de títulos reais indicados ao GOTY (Game of the Year) desde 2016.
 
-(crie antes um repositório vazio chamado `g0t1` no GitHub, sem README/license,
-para não dar conflito no push).
+A cada rodada, um jogo é sorteado — pode ser um clássico como *Elden Ring*, um indie como *Celeste*, ou até um flop. Você escolhe **um atributo** desse jogo (gráficos, trilha sonora, história, jogabilidade...) e o **posiciona** na vaga correspondente do seu projeto, numa HUD interativa de escalação.
 
-No Vercel:
-1. **Add New > Project > Import** e selecione o repositório `g0t1`.
-2. Framework Preset: **Other**. Build Command: vazio. Output Directory: vazio/raiz.
-3. Deploy. O `vercel.json` já aplica os headers de segurança automaticamente.
-4. Todo push futuro no `main` gera um novo deploy automático.
+Quando seu jogo estiver completo, você enfrenta a **Jornada ao GOTY**: uma cerimônia de premiação por categoria onde 1º, 2º e 3º lugar somam pontos. Só leva o título de Jogo do Ano quem dominar várias categorias.
 
-## Arquivos
+---
 
-- `index.html`, `style.css`, `data.js`, `app.js` — código do jogo (edite estes).
-- `netlify.toml` / `vercel.json` — configuração de deploy com headers de segurança.
+## Como jogar
 
+1. **Escolha um modo** de jogo na tela inicial.
+2. A cada rodada, um jogo é revelado com seus atributos. **Clique no atributo** que quer herdar.
+3. O atributo fica selecionado (em destaque dourado) — então **clique na vaga** correspondente na escalação para posicioná-lo.
+4. Repita até preencher todas as vagas. Use rerolls para trocar o jogo sorteado se quiser.
+5. Dê um **nome e temática** ao seu jogo.
+6. Enfrente a **Jornada ao GOTY** e veja se você é campeão!
+
+---
+
+## Modos de jogo
+
+| Modo | Descrição |
+|------|-----------|
+| **Clássico** | Modo padrão. 3 rerolls disponíveis. |
+| **De Almanaque** | Notas dos jogos ficam ocultas durante o draft. |
+| **Lendário** | Sem rerolls e sem ver as notas. O mais difícil. |
+| **Estúdio Indie** | Só jogos independentes. Vença o Indie do Ano antes de disputar as categorias principais. |
+
+---
+
+## Catálogo
+
+Mais de 100 jogos incluídos: todos os indicados ao GOTY de 2016 a 2025, grandes clássicos, jogos medianos e flops históricos — com notas realistas por categoria.
+
+*Alguns exemplos: Elden Ring, Baldur's Gate 3, The Last of Us Part II, God of War, Sekiro, Celeste, Hollow Knight, Astro Bot, Clair Obscur: Expedition 33...*
+
+---
+
+## Tecnologia
+
+- HTML, CSS e JavaScript puro — sem frameworks, sem build step.
+- Zero requisições de rede durante o jogo. Nada que você digita sai do navegador.
+- Deploy estático via Vercel.
+
+---
 
 ## Rodar localmente
 
 ```bash
-python -m http.server 8000   # depois acesse http://localhost:8000
+git clone https://github.com/ramonscripts/g0t1-game.git
+cd g0t1-game
+python -m http.server 8000
+# acesse http://localhost:8000
 ```
 
-Ou apenas dê dois cliques em `index.html` (alguns recursos podem pedir um
-servidor local dependendo do navegador, mas o jogo é 100% estático).
+Ou simplesmente abra o `index.html` no navegador.
 
-## Outras formas de hospedar
+---
 
-### Netlify (arrastar e soltar)
-1. Entre em https://app.netlify.com e faça login.
-2. Vá em **Sites** e arraste a **pasta inteira do projeto** para a área
-   "Drag and drop your site output folder here".
-3. O `netlify.toml` já aplica os headers de segurança automaticamente.
-
-### GitHub Pages (alternativa)
-1. No repositório, vá em **Settings > Pages > Source: Deploy from a branch**,
-   escolha `main` / `root`.
-2. A URL fica `seu-usuario.github.io/g0t1`.
-   (o `.toml`/`.json` não se aplicam aqui, mas o jogo funciona igual).
-
-## Segurança e privacidade
-
-- **Zero rede:** o jogo não faz nenhuma requisição de dados. `connect-src 'none'`
-  na CSP bloqueia qualquer tentativa. Nada que você digita sai do navegador.
-- **Input sanitizado:** nome e slogan passam por validação (remoção de
-  caracteres de controle, limite de tamanho, exigência de alfanumérico) e todo
-  texto do jogador é escapado antes de ir pro HTML — sem brecha de XSS.
-- **Sem armazenamento externo:** nenhum cookie, nenhum tracker, nenhum
-  `localStorage` enviado a lugar nenhum.
-- **Proteção de runtime:** handlers críticos rodam dentro de try/catch para o
-  jogo não travar com um erro inesperado.
-- As únicas conexões externas são para baixar a fonte (Google Fonts) e os
-  ícones (Tabler via jsDelivr). Quer 100% offline e self-hosted? Baixe esses
-  dois e troque os `@import` no topo do CSS por arquivos locais.
-
-## Editar o catálogo
-
-Tudo em `data.js`:
-- Adicionar um jogo: inclua um objeto em `GAMES` com `name`, `tags`, `desc` e
-  `stats` (uma nota 0-100 por categoria).
-- Nova temática: adicione em `THEMES` com `likes` e `dislikes` (tags).
-- Novo modo: adicione em `GAME_MODES` (pesos opcionais por categoria em `weights`).
+© Direitos Autorais de **ramonscripts** — todos os direitos reservados.
