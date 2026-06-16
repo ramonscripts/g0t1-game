@@ -10,18 +10,22 @@
 <body>
 <div class="scanlines" aria-hidden="true"></div>
 
+<button id="btn-theme" class="theme-toggle" type="button" title="Alternar modo claro/escuro" aria-label="Alternar tema">
+  <i class="ti ti-sun"></i>
+</button>
+
 <div class="app">
 
   <!-- ===================== TELA 1: MENU ===================== -->
   <section id="screen-menu" class="screen active">
     <div class="menu-wrap">
       <div class="logo">
-        <span class="logo-num">7</span><span class="logo-sep">×</span><span class="logo-num">0</span>
-        <span class="logo-sub">EDITION · GAME OF THE YEAR</span>
+        <i class="ti ti-trophy logo-icon"></i>
+        <span class="logo-sub">JORNADA AO GAME OF THE YEAR</span>
       </div>
       <h1 class="pixel-title">G0T1</h1>
       <p class="subtitle">Game of the Year, montado por você</p>
-      <p class="tagline">Gire o sorteio: cai um jogo, e você escolhe qual qualidade dele herdar. Junte pedaços de clássicos e flops para forjar seu jogo — e dispute a Copa GOTY.</p>
+      <p class="tagline">Gire o sorteio: cai um jogo, e você escolhe qual qualidade dele herdar e em qual vaga do seu jogo posicioná-la. Junte pedaços de clássicos e flops para forjar seu jogo — e encare a Jornada ao GOTY.</p>
 
       <div class="mode-select">
         <h3 class="block-label">Escolha o modo</h3>
@@ -39,13 +43,13 @@
       <div id="rules-box" class="rules-box hidden">
         <h4>Como jogar</h4>
         <ul>
-          <li>A cada rodada, <strong>1 jogo é sorteado</strong> de um catálogo grande de clássicos, medianos e flops.</li>
-          <li>Você escolhe <strong>UM atributo ainda vazio</strong> desse jogo para herdar (ex.: pegar os gráficos do Zelda).</li>
+          <li>A cada rodada, <strong>1 jogo é sorteado</strong> de um catálogo enorme — indicados ao GOTY desde 2016, clássicos, medianos e flops.</li>
+          <li>Você <strong>seleciona um atributo</strong> desse jogo e <strong>clica na vaga</strong> correspondente do seu jogo para posicioná-lo — como escalar um time.</li>
           <li>Cada jogo tem <strong>notas diferentes por atributo</strong> — o Zelda tem mundo excelente mas online fraco.</li>
-          <li>Atributos já preenchidos ficam <strong>bloqueados</strong>: o jogo seguinte só preenche o que falta.</li>
-          <li>Você tem um número de <strong>giros para a partida inteira</strong> — cada vez que re-sortear o jogo, gasta um. Quando acabam, não há mais giros até o fim.</li>
+          <li>Vagas já preenchidas ficam <strong>bloqueadas</strong>: o jogo seguinte só preenche o que falta.</li>
+          <li>Você tem <strong>poucos giros</strong> para a partida inteira — cada re-sorteio gasta um. No Lendário, não há giros.</li>
           <li>No fim, dá <strong>nome e temática</strong>. A temática que combina com suas escolhas dá <strong>bônus de afinidade</strong>.</li>
-          <li>Na <strong>Copa GOTY</strong>, você enfrenta rivais em quartas, semi e final — o placar é revelado aos poucos.</li>
+          <li>Na <strong>Jornada ao GOTY</strong>, cada categoria premia 1º, 2º e 3º lugar e dá pontos. Só leva o <strong>Jogo do Ano</strong> quem somar pontos vencendo várias categorias.</li>
         </ul>
       </div>
     </div>
@@ -63,8 +67,8 @@
 
     <div class="draft-intro">
       <span class="category-eyebrow" id="draft-eyebrow">Rodada 1</span>
-      <h2 id="draft-heading">Gire e herde um atributo</h2>
-      <p class="category-hint">Um jogo foi sorteado. Escolha qual qualidade dele entra no seu jogo.</p>
+      <h2 id="draft-heading">Selecione um atributo e posicione</h2>
+      <p class="category-hint">Um jogo foi sorteado. Escolha uma qualidade dele e clique na vaga do seu jogo onde quer encaixá-la.</p>
     </div>
 
     <div id="synergy-banner" class="synergy-banner hidden"></div>
@@ -79,7 +83,7 @@
         </div>
         <button id="btn-reroll" class="btn-secondary" type="button"><i class="ti ti-dice"></i> <span id="reroll-text">Girar de novo</span></button>
       </div>
-      <p class="rolled-prompt" id="rolled-prompt">Qual atributo deste jogo você quer herdar?</p>
+      <p class="rolled-prompt" id="rolled-prompt">1. Selecione o atributo que quer herdar:</p>
       <div id="attr-grid" class="attr-grid"></div>
       <div id="next-bar" class="next-bar hidden">
         <span id="next-confirm" class="next-confirm"></span>
@@ -87,9 +91,10 @@
       </div>
     </div>
 
-    <!-- atributos já montados -->
+    <!-- HUD de posicionamento: o seu jogo -->
     <div class="built-section">
-      <h3 class="block-label">Seu jogo até agora</h3>
+      <h3 class="block-label">2. Posicione na escalação do seu jogo</h3>
+      <p class="hud-hint" id="hud-hint">Selecione um atributo acima; a vaga compatível vai piscar — clique nela para encaixar.</p>
       <div id="built-grid" class="built-grid"></div>
     </div>
   </section>
@@ -121,7 +126,7 @@
         <input type="text" id="input-tagline" placeholder="Ex: O fim é apenas o começo." maxlength="60" autocomplete="off">
       </div>
 
-      <button id="btn-compete" class="btn-primary btn-large" type="button"><i class="ti ti-trophy"></i> Disputar a Copa GOTY</button>
+      <button id="btn-compete" class="btn-primary btn-large" type="button"><i class="ti ti-trophy"></i> Encarar a Jornada ao GOTY</button>
     </div>
   </section>
 
@@ -152,11 +157,17 @@
         <button id="btn-skip" class="btn-secondary" type="button"><i class="ti ti-player-skip-forward"></i> Pular para o final</button>
       </div>
 
+      <div id="points-board" class="points-board hidden">
+        <div class="pb-item"><span class="pb-label">Pontos</span><span id="pb-points" class="pb-value">0</span></div>
+        <div class="pb-item"><span class="pb-label">Meta p/ GOTY</span><span id="pb-target" class="pb-value">--</span></div>
+        <div class="pb-item"><span class="pb-label">Categorias vencidas</span><span id="pb-wins" class="pb-value">0</span></div>
+      </div>
+
       <div id="ceremony-stage" class="ceremony-stage">
         <div id="ceremony-narration" class="ceremony-narration"></div>
       </div>
 
-      <h3 class="section-title" id="bracket-title" style="display:none">Copa GOTY</h3>
+      <h3 class="section-title" id="bracket-title" style="display:none">Jornada ao GOTY — Categorias</h3>
       <div id="bracket" class="bracket"></div>
 
       <div id="verdict-box" class="verdict-box hidden"></div>
@@ -166,6 +177,10 @@
       </div>
     </div>
   </section>
+
+  <footer class="copyright">
+    <i class="ti ti-copyright"></i> Direitos Autorais de <strong>ramonscripts</strong> — todos os direitos reservados.
+  </footer>
 
 </div>
 

@@ -22,11 +22,18 @@
       .replace(/'/g, "&#39;");
   }
 
+  // Remove caracteres de controle sem usar literais de controle no código.
+  function stripControl(v) {
+    var out = "";
+    for (var i = 0; i < v.length; i++) { var c = v.charCodeAt(i); if (c > 31 && c !== 127) out += v.charAt(i); }
+    return out;
+  }
+
   // Valida e limpa o nome do jogo. Retorna {ok, value, error}.
   function sanitizeTitle(raw) {
     let v = String(raw == null ? "" : raw);
-    v = v.replace(/[\u0000-\u001F\u007F]/g, "");        // remove caracteres de controle
-    v = v.replace(/\s+/g, " ").trim();                   // colapsa espaços
+    v = stripControl(v);                 // remove caracteres de controle
+    v = v.replace(/\s+/g, " ").trim();   // colapsa espaços
     if (v.length === 0) return { ok: false, error: "Dê um nome ao seu jogo." };
     if (v.length > 40) v = v.slice(0, 40);
     if (!/[\p{L}\p{N}]/u.test(v)) return { ok: false, error: "O nome precisa ter ao menos uma letra ou número." };
@@ -35,25 +42,30 @@
 
   function sanitizeTagline(raw) {
     let v = String(raw == null ? "" : raw);
-    v = v.replace(/[\u0000-\u001F\u007F]/g, "").replace(/\s+/g, " ").trim();
+    v = stripControl(v).replace(/\s+/g, " ").trim();
     return v.slice(0, 60);
   }
 
   function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+  function randInt(lo, hi) { return Math.floor(Math.random() * (hi - lo + 1)) + lo; }
   function show(id) { $all(".screen").forEach(s => s.classList.remove("active")); const el = $(id); if (el) el.classList.add("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function tier(o) { if (o >= 88) return "elite"; if (o >= 70) return "good"; if (o >= 50) return "mid"; return "bad"; }
   function barColor(o) { if (o >= 88) return "var(--gold)"; if (o >= 70) return "var(--cyan)"; if (o >= 50) return "var(--text-2)"; return "var(--red)"; }
+  function isIndie(g) { return (g.tags || []).indexOf("indie") >= 0; }
 
   // ---------- estado ----------
   const state = {
     mode: GAME_MODES[0],
+    pool: GAMES,
     activeCats: [],
     filled: {},      // catKey -> { game, score }
     round: 0,        // quantos atributos já preenchidos
     currentGame: null,
     rerollsLeft: 0,
+    armed: null,     // { cat, score } — atributo selecionado para posicionar
+    locked: false,   // trava após posicionar até "Próximo jogo"
     theme: null,
     title: "",
     tagline: ""
@@ -119,8 +131,11 @@
     state.filled = {};
     state.round = 0;
     state.theme = null;
+    state.armed = null;
+    state.locked = false;
     state.rerollsLeft = state.mode.rerolls; // total para a partida inteira
     state.activeCats = CATEGORIES.slice(0, state.mode.categories);
+    state.pool = state.mode.indieOnly ? GAMES.filter(isIndie) : GAMES;
     $("#draft-mode-badge").textContent = state.mode.label;
     buildDots();
     renderBuilt();
@@ -139,60 +154,153 @@
   }
 
   function rollGame() {
-    state.currentGame = pick(GAMES);
+    state.armed = null;
+    state.locked = false;
+    state.currentGame = pick(state.pool);
     $("#next-bar").classList.add("hidden");
+    $("#rolled-prompt").textContent = "1. Selecione o atributo que quer herdar:";
     $("#draft-eyebrow").textContent = "Rodada " + (state.round + 1) + " de " + state.activeCats.length;
     renderRolled();
+    renderBuilt();
     renderRerollBtn();
     renderSynergyBanner();
     updateProgress();
+    updateHudHint();
   }
 
   function renderRolled() {
     const g = state.currentGame;
-    $("#rolled-name").textContent = g.name;
+    const yr = g.year ? ' <span class="rolled-year">(' + g.year + ')</span>' : '';
+    $("#rolled-name").innerHTML = escapeHTML(g.name) + yr;
     $("#rolled-desc").textContent = g.desc;
     $("#rolled-tags").innerHTML = (g.tags || []).map(t => '<span class="opt-tag">' + escapeHTML(t) + '</span>').join("");
 
     const grid = $("#attr-grid"); grid.innerHTML = "";
-    const remaining = remainingCats();
     state.activeCats.forEach(cat => {
       const score = g.stats[cat.key] != null ? g.stats[cat.key] : 45;
       const taken = !!state.filled[cat.key];
+      const armed = state.armed && state.armed.cat.key === cat.key;
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "attr-btn";
-      btn.disabled = taken;
+      btn.className = "attr-btn" + (armed ? " armed" : "");
+      btn.disabled = taken || state.locked;
 
       let scoreHtml;
       if (taken) scoreHtml = '<span class="attr-taken">já preenchido</span>';
       else if (state.mode.showStats) scoreHtml = '<span class="attr-score tier-' + tier(score) + '">' + score + '</span>';
       else scoreHtml = '<span class="attr-score hidden-score">? ? ?</span>';
 
-      btn.innerHTML = '<span class="attr-label"><i class="ti ' + escapeHTML(cat.icon) + '"></i>' + escapeHTML(cat.label) + '</span>' + scoreHtml;
-      if (!taken) btn.addEventListener("click", () => chooseAttr(cat, score));
+      btn.innerHTML = '<span class="attr-label"><i class="ti ' + escapeHTML(cat.icon) + '"></i>' + escapeHTML(cat.label) + '</span>' + scoreHtml +
+        (armed ? '<span class="attr-armed-tag"><i class="ti ti-hand-finger"></i> selecionado — clique na vaga</span>' : '');
+      if (!taken && !state.locked) btn.addEventListener("click", () => selectAttr(cat, score));
       grid.appendChild(btn);
     });
   }
 
   function renderRerollBtn() {
     const btn = $("#btn-reroll"), txt = $("#reroll-text");
-    if (state.rerollsLeft > 0) { btn.disabled = false; txt.textContent = "Girar de novo (" + state.rerollsLeft + " no total)"; }
-    else { btn.disabled = true; txt.textContent = "Giros esgotados"; }
+    if (state.mode.rerolls <= 0) { btn.disabled = true; txt.textContent = "Sem giros neste modo"; return; }
+    if (state.rerollsLeft > 0 && !state.locked) { btn.disabled = false; txt.textContent = "Girar de novo (" + state.rerollsLeft + " no total)"; }
+    else { btn.disabled = true; txt.textContent = state.rerollsLeft > 0 ? "Girar de novo (" + state.rerollsLeft + ")" : "Giros esgotados"; }
   }
 
+  // HUD de posicionamento — a "escalação" do seu jogo
   function renderBuilt() {
     const grid = $("#built-grid"); grid.innerHTML = "";
     state.activeCats.forEach(cat => {
-      const slot = document.createElement("div");
       const f = state.filled[cat.key];
-      slot.className = "built-slot" + (f ? " filled" : "");
-      const inner = f
-        ? '<div class="bs-cat"><i class="ti ' + escapeHTML(cat.icon) + '"></i>' + escapeHTML(cat.label) + '</div><div class="bs-game">' + escapeHTML(f.game.name) + '</div>'
-        : '<div class="bs-cat"><i class="ti ' + escapeHTML(cat.icon) + '"></i>' + escapeHTML(cat.label) + '</div><div class="bs-empty">vazio</div>';
-      slot.innerHTML = inner;
+      const isTarget = !f && state.armed && state.armed.cat.key === cat.key && !state.locked;
+      const slot = document.createElement(f ? "div" : "button");
+      if (!f) { slot.type = "button"; }
+      slot.className = "built-slot" + (f ? " filled" : " empty") + (isTarget ? " target" : "");
+      if (f) {
+        slot.innerHTML = '<div class="bs-cat"><i class="ti ' + escapeHTML(cat.icon) + '"></i>' + escapeHTML(cat.label) + '</div>' +
+          '<div class="bs-game">' + escapeHTML(f.game.name) + '</div>' +
+          (state.mode.showStats ? '<div class="bs-score tier-' + tier(f.score) + '">' + f.score + '</div>' : '<div class="bs-score">✓</div>');
+      } else {
+        slot.innerHTML = '<div class="bs-cat"><i class="ti ' + escapeHTML(cat.icon) + '"></i>' + escapeHTML(cat.label) + '</div>' +
+          '<div class="bs-empty">' + (isTarget ? '<i class="ti ti-arrow-down"></i> encaixar aqui' : 'vaga livre') + '</div>';
+        if (!state.locked) slot.addEventListener("click", () => placeArmed(cat));
+      }
       grid.appendChild(slot);
     });
+  }
+
+  function updateHudHint() {
+    const h = $("#hud-hint"); if (!h) return;
+    if (state.locked) { h.innerHTML = '<i class="ti ti-circle-check"></i> Atributo posicionado! Avance para o próximo jogo.'; h.className = "hud-hint ok"; return; }
+    if (state.armed) {
+      h.innerHTML = '<i class="ti ti-hand-finger"></i> <strong>' + escapeHTML(state.armed.cat.label) + '</strong> selecionado — clique na vaga piscando para encaixar.';
+      h.className = "hud-hint active";
+    } else {
+      h.textContent = "Selecione um atributo acima; a vaga compatível vai piscar — clique nela para encaixar.";
+      h.className = "hud-hint";
+    }
+  }
+  function flashHint(msg) {
+    const h = $("#hud-hint"); if (!h) return;
+    h.innerHTML = '<i class="ti ti-alert-triangle"></i> ' + escapeHTML(msg);
+    h.className = "hud-hint warn";
+  }
+
+  function selectAttr(cat, score) {
+    if (state.filled[cat.key] || state.locked) return;
+    state.armed = { cat: cat, score: score };
+    renderRolled();
+    renderBuilt();
+    updateHudHint();
+  }
+
+  function placeArmed(cat) {
+    if (state.locked) return;
+    if (!state.armed) { flashHint("Selecione primeiro um atributo do jogo sorteado."); return; }
+    if (state.armed.cat.key !== cat.key) {
+      flashHint('Esse atributo é de "' + state.armed.cat.label + '". Clique na vaga de ' + state.armed.cat.label + '.');
+      return;
+    }
+    if (state.filled[cat.key]) return;
+    confirmPlacement(state.armed.cat, state.armed.score);
+  }
+
+  function confirmPlacement(cat, score) {
+    state.filled[cat.key] = { game: state.currentGame, score: score };
+    state.round++;
+    state.armed = null;
+    state.locked = true;
+    renderBuilt();
+    renderRolled();
+    updateHudHint();
+
+    $("#btn-reroll").disabled = true;
+    $("#rolled-prompt").textContent = "Atributo posicionado!";
+    const bar = $("#next-bar");
+    const last = remainingCats().length === 0;
+    $("#next-confirm").innerHTML = '<i class="ti ti-circle-check-filled"></i>' + escapeHTML(cat.label) + ' de ' + escapeHTML(state.currentGame.name) + ' escalado.';
+    $("#btn-next").innerHTML = last
+      ? 'Finalizar e nomear <i class="ti ti-arrow-right"></i>'
+      : 'Próximo jogo <i class="ti ti-player-track-next"></i>';
+    bar.classList.remove("hidden");
+    updateProgress();
+  }
+
+  function onNext() {
+    $("#next-bar").classList.add("hidden");
+    if (remainingCats().length === 0) goToIdentity();
+    else rollGame();
+  }
+
+  function onReroll() {
+    if (state.rerollsLeft <= 0 || state.locked) return;
+    state.rerollsLeft--;
+    let next = pick(state.pool);
+    let guard = 0;
+    while (next === state.currentGame && guard++ < 12) next = pick(state.pool);
+    state.currentGame = next;
+    state.armed = null;
+    renderRolled();
+    renderBuilt();
+    renderRerollBtn();
+    updateHudHint();
   }
 
   function renderSynergyBanner() {
@@ -203,44 +311,6 @@
     banner.className = "synergy-banner " + (top.bonus >= 0 ? "bonus" : "malus");
     banner.innerHTML = '<i class="ti ' + (top.bonus >= 0 ? "ti-bolt" : "ti-alert-triangle") + '"></i>' + escapeHTML(top.msg);
     banner.classList.remove("hidden");
-  }
-
-  function chooseAttr(cat, score) {
-    if (state.filled[cat.key]) return; // proteção: nunca sobrescreve
-    state.filled[cat.key] = { game: state.currentGame, score: score };
-    state.round++;
-    renderBuilt();
-
-    // trava os botões de atributo e mostra a barra "Próximo" (jogador controla o avanço)
-    $all("#attr-grid .attr-btn").forEach(b => { b.disabled = true; });
-    $("#btn-reroll").disabled = true;
-    $("#rolled-prompt").textContent = "Atributo herdado!";
-    const bar = $("#next-bar");
-    const last = remainingCats().length === 0;
-    $("#next-confirm").innerHTML = '<i class="ti ti-circle-check-filled"></i>' + escapeHTML(cat.label) + ' de ' + escapeHTML(state.currentGame.name) + ' adicionado.';
-    $("#btn-next").innerHTML = last
-      ? 'Finalizar e nomear <i class="ti ti-arrow-right"></i>'
-      : 'Próximo jogo <i class="ti ti-player-track-next"></i>';
-    bar.classList.remove("hidden");
-  }
-
-  function onNext() {
-    $("#next-bar").classList.add("hidden");
-    $("#rolled-prompt").textContent = "Qual atributo deste jogo você quer herdar?";
-    if (remainingCats().length === 0) goToIdentity();
-    else rollGame();
-  }
-
-  function onReroll() {
-    if (state.rerollsLeft <= 0) return;
-    state.rerollsLeft--;
-    let next = pick(GAMES);
-    // evita repetir o mesmo jogo no reroll, se possível
-    let guard = 0;
-    while (next === state.currentGame && guard++ < 10) next = pick(GAMES);
-    state.currentGame = next;
-    renderRolled();
-    renderRerollBtn();
   }
 
   // ---------- overall ----------
@@ -297,40 +367,88 @@
     detail.innerHTML = html || "Suas escolhas não puxam fortemente para esta temática.";
   }
 
-  function suggestTitle() { return pick(TITLE_PARTS.prefix) + " " + pick(TITLE_PARTS.core) + pick(TITLE_PARTS.suffix); }
+  // gerador de nomes mais variado
+  function suggestTitle() {
+    const P = TITLE_PARTS;
+    const used = [];
+    function uniqCore() { let c, g = 0; do { c = pick(P.core); } while (used.indexOf(c) >= 0 && g++ < 12); used.push(c); return c; }
+    const helpers = {
+      prefix: () => pick(P.prefix), core: uniqCore, coreB: uniqCore,
+      suffix: () => pick(P.suffix), adjective: () => pick(P.adjective),
+      noun: () => pick(P.noun), subtitle: () => pick(P.subtitle), numeral: () => pick(P.numeral)
+    };
+    let name = "";
+    for (let attempt = 0; attempt < 8; attempt++) {
+      used.length = 0;
+      name = pick(P.patterns)(helpers).replace(/\s+/g, " ").trim();
+      if (name.length >= 3 && name.length <= 40) break;
+    }
+    return name.slice(0, 40);
+  }
 
-  // ---------- Copa GOTY + Cerimônia ----------
-  // ritmo da cerimônia (multiplicadores de tempo)
+  // ---------- Jornada ao GOTY + Cerimônia (premiação por categorias) ----------
   const SPEEDS = { slow: 1.7, normal: 1, fast: 0.45 };
-  const ceremony = { speed: "normal", timers: [], skipped: false, rounds: null, overall: 0, safeTitle: "" };
+  const ceremony = { speed: "normal", timers: [], skipped: false, dotIv: null, result: null, safeTitle: "" };
 
   function ms(base) { return Math.round(base * SPEEDS[ceremony.speed]); }
-  function clearCeremonyTimers() { ceremony.timers.forEach(t => { if (t && t._iv) clearInterval(t._iv); else clearTimeout(t); }); ceremony.timers = []; }
   function later(fn, delay) { const t = setTimeout(fn, delay); ceremony.timers.push(t); return t; }
-
-  function buildBracket(playerOverall) {
-    const rivals = shuffle(RIVALS).slice(0, 3);
-    const stages = ["Quartas de final", "Semifinal", "Final — Game of the Year"];
-    const rounds = [];
-    for (let i = 0; i < 3; i++) {
-      const r = rivals[i];
-      const rivalPower = clamp(r.power + state.mode.rivalBias + i * 2, 68, 99);
-      const youScore = clamp(playerOverall + Math.round(Math.random() * 10 - 5), 10, 99);
-      const rivalScore = clamp(rivalPower + Math.round(Math.random() * 10 - 5), 10, 99);
-      rounds.push({ stage: stages[i], rival: r, youScore: youScore, rivalScore: rivalScore, won: youScore >= rivalScore });
-    }
-    return rounds;
+  function stopDots() { if (ceremony.dotIv) { clearInterval(ceremony.dotIv); ceremony.dotIv = null; } }
+  function clearCeremonyTimers() { ceremony.timers.forEach(t => { if (t && t._iv) clearInterval(t._iv); else clearTimeout(t); }); ceremony.timers = []; stopDots(); }
+  function startDots() {
+    stopDots(); let d = 0;
+    const iv = setInterval(() => { const e = $("#dots"); if (!e) { clearInterval(iv); return; } d = (d % 5) + 1; e.textContent = ".".repeat(d); }, ms(260));
+    ceremony.dotIv = iv; ceremony.timers.push({ _iv: iv });
   }
-  function flavorFor(diff) {
-    if (Math.abs(diff) <= 3) return pick(MATCH_FLAVOR.close);
-    if (Math.abs(diff) >= 12) return pick(MATCH_FLAVOR.blowout);
-    return pick(MATCH_FLAVOR.intro);
+
+  function goalFor() {
+    const n = state.activeCats.length;
+    return { points: Math.round(n * 4.5), wins: Math.max(2, Math.round(n / 3)) };
+  }
+
+  // monta o pódio de uma categoria: jogador vs rivais
+  function buildCategoryAward(cat) {
+    const playerScore = state.filled[cat.key].score;
+    const rivals = shuffle(RIVALS).slice(0, NOMINEES_PER_CATEGORY).map(r => {
+      const base = (r.power - 6) + state.mode.rivalBias;
+      return { name: r.name, trait: r.trait, score: clamp(Math.round(base + randInt(-12, 12)), 45, 98), you: false };
+    });
+    const nominees = rivals.concat([{ name: state.title, trait: "seu jogo", score: playerScore, you: true }]);
+    nominees.sort((a, b) => (b.score - a.score) || (a.you ? 1 : b.you ? -1 : 0)); // empate: rival na frente (mais difícil)
+    const place = nominees.findIndex(n => n.you) + 1;
+    const points = place === 1 ? AWARD_POINTS.first : place === 2 ? AWARD_POINTS.second : place === 3 ? AWARD_POINTS.third : 0;
+    return { cat: cat, nominees: nominees, place: place, points: points };
+  }
+
+  // prêmio de Jogo Indie do Ano (modo indie) — precisa ser 1º para avançar
+  function buildIndieAward(overall) {
+    const rivals = shuffle(INDIE_RIVALS).slice(0, 3).map(r => ({
+      name: r.name, trait: r.trait, score: clamp(Math.round((r.power - 9) + state.mode.rivalBias + randInt(-12, 12)), 45, 98), you: false
+    }));
+    const nominees = rivals.concat([{ name: state.title, trait: "seu indie", score: overall, you: true }]);
+    nominees.sort((a, b) => (b.score - a.score) || (a.you ? 1 : b.you ? -1 : 0));
+    const place = nominees.findIndex(n => n.you) + 1;
+    return { nominees: nominees, place: place, won: place === 1 };
+  }
+
+  function buildResult(overall) {
+    const goal = goalFor();
+    const indie = state.mode.indieOnly ? buildIndieAward(overall) : null;
+
+    if (indie && !indie.won) {
+      return { overall: overall, indie: indie, awards: null, totalPoints: 0, totalWins: 0, goal: goal, champion: false, indieLost: true };
+    }
+
+    const awards = state.activeCats.map(buildCategoryAward);
+    let totalPoints = 0, totalWins = 0;
+    awards.forEach(a => { totalPoints += a.points; if (a.place === 1) totalWins++; });
+    const champion = totalPoints >= goal.points && totalWins >= goal.wins;
+    return { overall: overall, indie: indie, awards: awards, totalPoints: totalPoints, totalWins: totalWins, goal: goal, champion: champion, indieLost: false };
   }
 
   function showResult() {
     const ov = computeOverall();
     ceremony.safeTitle = escapeHTML(state.title);
-    ceremony.overall = ov.final;
+    ceremony.result = buildResult(ov.final);
 
     $("#result-theme-badge").innerHTML = '<i class="ti ' + escapeHTML(state.theme.icon) + '"></i>' + escapeHTML(state.theme.label);
     $("#result-title").textContent = state.title;
@@ -360,7 +478,6 @@
     ov.synergies.forEach(s => addFlag(flags, s.bonus >= 0 ? "good" : "bad", s.bonus >= 0 ? "ti-bolt" : "ti-alert-triangle", escapeHTML(s.msg)));
 
     // prepara cerimônia
-    ceremony.rounds = buildBracket(ov.final);
     ceremony.skipped = false;
     clearCeremonyTimers();
     $("#bracket").innerHTML = "";
@@ -368,6 +485,7 @@
     $("#verdict-box").classList.add("hidden");
     $("#btn-restart").classList.add("hidden");
     $("#btn-skip").disabled = false;
+    resetPointsBoard();
     setActiveSpeedButton(ceremony.speed);
 
     show("#screen-result");
@@ -391,119 +509,201 @@
     if (flash) { stage.classList.remove("flash"); void stage.offsetWidth; stage.classList.add("flash"); }
   }
 
-  // monta o card de uma partida no bracket (revelado)
-  function appendMatchCard(r) {
+  // ---- placar de pontos ----
+  function resetPointsBoard() {
+    $("#points-board").classList.add("hidden");
+    $("#pb-points").textContent = "0";
+    $("#pb-target").textContent = "--";
+    $("#pb-wins").textContent = "0";
+    $("#pb-points").className = "pb-value";
+    $("#pb-wins").className = "pb-value";
+  }
+  function showPointsBoard() {
+    const r = ceremony.result;
+    $("#points-board").classList.remove("hidden");
+    $("#pb-target").textContent = r.goal.points + " pts · " + r.goal.wins + " cat.";
+  }
+  function setPointsBoard(points, wins) {
+    const r = ceremony.result;
+    $("#pb-points").textContent = points;
+    $("#pb-wins").textContent = wins;
+    $("#pb-points").className = "pb-value" + (points >= r.goal.points ? " hit" : "");
+    $("#pb-wins").className = "pb-value" + (wins >= r.goal.wins ? " hit" : "");
+  }
+
+  // ---- cards de premiação ----
+  function appendAwardCard(label, icon, award) {
     $("#bracket-title").style.display = "block";
     const b = $("#bracket");
     const m = document.createElement("div");
-    m.className = "match " + (r.won ? "win-result" : "lose-result");
+    const cls = award.place === 1 ? "first" : (award.place <= 3 ? "podium" : "missed");
+    m.className = "award " + cls;
+    const medals = ["ti-trophy", "ti-medal", "ti-medal-2"];
+    let rows = "";
+    award.nominees.forEach((n, idx) => {
+      const rank = idx + 1;
+      const mic = rank <= 3 ? medals[rank - 1] : "ti-point";
+      rows += '<div class="award-row' + (n.you ? " you" : "") + (rank <= 3 ? " podium-row r" + rank : "") + '">' +
+        '<span class="ar-rank"><i class="ti ' + mic + '"></i>' + rank + 'º</span>' +
+        '<span class="ar-name">' + (n.you ? ceremony.safeTitle : escapeHTML(n.name)) + '</span>' +
+        '<span class="ar-score">' + n.score + '</span></div>';
+    });
+    const ptsTxt = award.points > 0 ? '+' + award.points + ' pts' : '0 pts';
     m.innerHTML =
-      '<div class="match-stage"><i class="ti ti-trophy"></i>' + escapeHTML(r.stage) + '</div>' +
-      '<div class="match-body">' +
-        '<div class="match-side"><div class="side-name you">' + ceremony.safeTitle + '</div><div class="side-trait">seu jogo</div></div>' +
-        '<div class="match-score">' + r.youScore + ' : ' + r.rivalScore + '</div>' +
-        '<div class="match-side right"><div class="side-name">' + escapeHTML(r.rival.name) + '</div><div class="side-trait">' + escapeHTML(r.rival.trait) + '</div></div>' +
-      '</div>' +
-      '<div class="match-outcome ' + (r.won ? "win" : "lose") + ' show">' + (r.won ? '<i class="ti ti-check"></i>Avança!' : '<i class="ti ti-x"></i>Eliminado') + '</div>';
+      '<div class="award-head"><span class="award-cat"><i class="ti ' + escapeHTML(icon) + '"></i>' + escapeHTML(label) + '</span>' +
+      '<span class="award-points ' + (award.points > 0 ? "pos" : "zero") + '">' + escapeHTML(award.place + 'º lugar · ' + ptsTxt) + '</span></div>' +
+      '<div class="award-rows">' + rows + '</div>';
     b.appendChild(m);
   }
 
-  // sequência narrada — cada etapa agenda a próxima
+  // ---- sequência da cerimônia (decidida de antemão em ceremony.result) ----
   function runCeremony() {
-    const rounds = ceremony.rounds;
-    let i = 0;
-    narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.open)) + '</span>', true);
+    const r = ceremony.result;
+    const steps = [];
 
-    function nextStage() {
-      if (ceremony.skipped) return;
-      if (i >= rounds.length) { return; }
-      const r = rounds[i];
-      const isFinal = (i === rounds.length - 1);
+    // abertura
+    steps.push({ run: () => narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.open)) + '</span>', true), after: ms(1900) });
 
-      // 1) anuncia a etapa
-      const lead = isFinal ? pick(CEREMONY.beforeFinal) : pick(CEREMONY.nextCategory);
-      narr('<span class="narr-host">' + escapeHTML(lead) + '</span>', true);
-
-      // 2) mostra a categoria/confronto
-      later(() => {
-        if (ceremony.skipped) return;
-        narr('<span class="narr-cat"><i class="ti ti-trophy"></i>' + escapeHTML(r.stage) + '</span><br><br><span class="narr-host">' + ceremony.safeTitle + ' enfrenta ' + escapeHTML(r.rival.name) + ' — ' + escapeHTML(r.rival.trait) + '. ' + escapeHTML(flavorFor(r.youScore - r.rivalScore)) + '</span>');
-
-        // 3) suspense antes do vencedor
-        later(() => {
-          if (ceremony.skipped) return;
-          const phrase = isFinal ? pick(CEREMONY.finalSuspense) : pick(CEREMONY.suspenseWinner);
-          narr('<span class="narr-host">' + escapeHTML(phrase) + '...</span> <span class="suspense-dots" id="dots"></span>');
-          // reticências animadas
-          let dots = 0;
-          const dotIv = setInterval(() => {
-            const el = $("#dots"); if (!el) { clearInterval(dotIv); return; }
-            dots = (dots % 5) + 1; el.textContent = ".".repeat(dots);
-          }, ms(260));
-          ceremony.timers.push({ _iv: dotIv });
-
-          // 4) revela vencedor
-          later(() => {
-            clearInterval(dotIv);
-            if (ceremony.skipped) return;
-            const winnerName = r.won ? state.title : r.rival.name;
-            const youWon = r.won;
-            narr('<span class="narr-winner"><i class="ti ti-' + (youWon ? "trophy" : "medal") + '"></i>' + escapeHTML(winnerName) + '!</span><br><br><span class="narr-host">' + r.youScore + ' a ' + r.rivalScore + (youWon ? ' — seu jogo avança!' : ' — fim de linha.') + '</span>', true);
-            appendMatchCard(r);
-
-            i++;
-            if (r.won && i < rounds.length) later(nextStage, ms(1400));
-            else later(() => finishCup(rounds, i - 1, ceremony.overall), ms(1400));
-          }, ms(1900));
-        }, ms(2100));
-      }, ms(1700));
+    // prêmio indie (modo indie)
+    if (r.indie) {
+      steps.push({ run: () => narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.indieIntro)) + '</span>', true), after: ms(1800) });
+      steps.push({ run: () => { narr('<span class="narr-host">E o Jogo Indie do Ano é</span>... <span class="suspense-dots" id="dots"></span>'); startDots(); }, after: ms(2100) });
+      steps.push({
+        run: () => {
+          stopDots();
+          appendAwardCard("Jogo Indie do Ano", "ti-bulb", { place: r.indie.place, points: 0, nominees: r.indie.nominees });
+          if (r.indie.won) narr('<span class="narr-winner"><i class="ti ti-trophy"></i>' + ceremony.safeTitle + '!</span><br><br><span class="narr-host">Indie do Ano! Você avança para as categorias principais.</span>', true);
+          else narr('<span class="narr-winner"><i class="ti ti-medal"></i>' + escapeHTML(r.indie.nominees[0].name) + '!</span><br><br><span class="narr-host">Seu indie ficou em ' + r.indie.place + 'º e parou aqui.</span>', true);
+        }, after: ms(1700)
+      });
+      if (!r.indie.won) {
+        steps.push({ run: () => finishGoty(), after: 0 });
+        runSteps(steps);
+        return;
+      }
     }
 
-    later(nextStage, ms(1900));
+    // categorias
+    steps.push({ run: () => { showPointsBoard(); setPointsBoard(0, 0); }, after: ms(700) });
+
+    let runningPts = 0, runningWins = 0;
+    r.awards.forEach(award => {
+      steps.push({
+        run: () => narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.nextCategory)) + '</span> <span class="narr-cat"><i class="ti ' + escapeHTML(award.cat.icon) + '"></i>' + escapeHTML(award.cat.label) + '</span>', true),
+        after: ms(1700)
+      });
+      steps.push({ run: () => { narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.podiumIntro)) + ' E o 1º lugar é</span>... <span class="suspense-dots" id="dots"></span>'); startDots(); }, after: ms(1900) });
+      steps.push({
+        run: () => {
+          stopDots();
+          appendAwardCard(award.cat.label, award.cat.icon, award);
+          runningPts += award.points; if (award.place === 1) runningWins++;
+          setPointsBoard(runningPts, runningWins);
+          const top = award.nominees[0];
+          const youWon = award.place === 1;
+          const msg = youWon
+            ? '<span class="narr-winner"><i class="ti ti-trophy"></i>' + ceremony.safeTitle + '!</span><br><br><span class="narr-host">Levou a categoria! +' + award.points + ' pontos.</span>'
+            : '<span class="narr-winner"><i class="ti ti-medal"></i>' + escapeHTML(top.name) + '!</span><br><br><span class="narr-host">Você ficou em ' + award.place + 'º — ' + (award.points > 0 ? '+' + award.points + ' pts no pódio.' : 'sem pontos desta vez.') + '</span>';
+          narr(msg, true);
+        }, after: ms(1500)
+      });
+    });
+
+    // final
+    steps.push({ run: () => narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.beforeFinal)) + '</span>', true), after: ms(1800) });
+    steps.push({ run: () => { narr('<span class="narr-host">' + escapeHTML(pick(CEREMONY.finalSuspense)) + '</span>... <span class="suspense-dots" id="dots"></span>'); startDots(); }, after: ms(2200) });
+    steps.push({ run: () => { stopDots(); finishGoty(); }, after: 0 });
+
+    runSteps(steps);
+  }
+
+  function runSteps(steps) {
+    let i = 0;
+    function next() {
+      if (ceremony.skipped) return;
+      if (i >= steps.length) return;
+      const step = steps[i++];
+      try { step.run(); } catch (e) { console.error("[G0T1]", e); }
+      if (i < steps.length) later(next, step.after);
+    }
+    next();
   }
 
   function skipCeremony() {
     if (ceremony.skipped) return;
     ceremony.skipped = true;
-    // limpa timers e intervalos pendentes
-    ceremony.timers.forEach(t => { if (t && t._iv) clearInterval(t._iv); else clearTimeout(t); });
-    ceremony.timers = [];
-    // renderiza o bracket inteiro de uma vez
+    clearCeremonyTimers();
+    const r = ceremony.result;
     const b = $("#bracket"); b.innerHTML = ""; $("#bracket-title").style.display = "block";
-    let lastIdx = ceremony.rounds.length - 1;
-    for (let k = 0; k < ceremony.rounds.length; k++) {
-      appendMatchCard(ceremony.rounds[k]);
-      if (!ceremony.rounds[k].won) { lastIdx = k; break; }
+
+    if (r.indie) appendAwardCard("Jogo Indie do Ano", "ti-bulb", { place: r.indie.place, points: 0, nominees: r.indie.nominees });
+
+    if (!r.indieLost) {
+      showPointsBoard();
+      r.awards.forEach(a => appendAwardCard(a.cat.label, a.cat.icon, a));
+      setPointsBoard(r.totalPoints, r.totalWins);
     }
     narr('<span class="narr-host">Cerimônia encerrada.</span>');
     $("#btn-skip").disabled = true;
-    finishCup(ceremony.rounds, lastIdx, ceremony.overall);
+    finishGoty();
   }
 
   function setActiveSpeedButton(speed) {
     $all(".speed-btn").forEach(btn => btn.classList.toggle("active", btn.getAttribute("data-speed") === speed));
   }
 
-  function finishCup(rounds, lastIdx, playerOverall) {
-    const champion = rounds.every(r => r.won);
+  function finishGoty() {
+    const r = ceremony.result;
     const v = $("#verdict-box");
-    const safeTitle = escapeHTML(state.title);
-    if (champion) {
-      v.className = "verdict-box champion";
-      v.innerHTML = '<i class="ti ti-trophy verdict-icon"></i><div class="verdict-title">GAME OF THE YEAR!</div><div class="verdict-text">' + safeTitle + ' levou a estatueta máxima. Overall ' + playerOverall + ' venceu a noite inteira.</div>';
-    } else {
-      const lostTo = escapeHTML(rounds[lastIdx].rival.name);
+    const safeTitle = ceremony.safeTitle;
+
+    if (r.indieLost) {
       v.className = "verdict-box lost";
-      v.innerHTML = '<i class="ti ti-medal verdict-icon" style="color:var(--text-2)"></i><div class="verdict-title">INDICADO</div><div class="verdict-text">' + safeTitle + ' caiu para ' + lostTo + ' na ' + escapeHTML(rounds[lastIdx].stage.toLowerCase()) + '. Com overall ' + playerOverall + ', faltou pouco — refine os pontos fracos e a temática.</div>';
+      v.innerHTML = '<i class="ti ti-medal verdict-icon" style="color:var(--text-2)"></i><div class="verdict-title">FORA DA DISPUTA</div>' +
+        '<div class="verdict-text">' + safeTitle + ' ficou em ' + r.indie.place + 'º no Jogo Indie do Ano e não passou para as categorias principais. Reforce inovação e jogabilidade — é onde os indies brilham.</div>';
+    } else if (r.champion) {
+      v.className = "verdict-box champion";
+      v.innerHTML = '<i class="ti ti-trophy verdict-icon"></i><div class="verdict-title">GAME OF THE YEAR!</div>' +
+        '<div class="verdict-text">' + safeTitle + ' somou <strong>' + r.totalPoints + ' pontos</strong> vencendo <strong>' + r.totalWins + ' categorias</strong> e levou a estatueta máxima. Overall ' + r.overall + '. Uma noite histórica!</div>';
+    } else {
+      const shortPts = Math.max(0, r.goal.points - r.totalPoints);
+      const shortWins = Math.max(0, r.goal.wins - r.totalWins);
+      let reason;
+      if (shortWins > 0 && shortPts > 0) reason = 'Faltaram ' + shortPts + ' pontos e ' + shortWins + ' vitória(s) de categoria.';
+      else if (shortWins > 0) reason = 'Você tinha pontos, mas faltaram ' + shortWins + ' vitória(s) de categoria — é preciso dominar, não só pontuar.';
+      else reason = 'Faltaram ' + shortPts + ' pontos para a meta.';
+      v.className = "verdict-box lost";
+      v.innerHTML = '<i class="ti ti-medal verdict-icon" style="color:var(--text-2)"></i><div class="verdict-title">INDICADO</div>' +
+        '<div class="verdict-text">' + safeTitle + ' fez <strong>' + r.totalPoints + '/' + r.goal.points + ' pts</strong> e venceu <strong>' + r.totalWins + '/' + r.goal.wins + '</strong> categorias. ' + reason + ' Refine os pontos fracos e a temática.</div>';
     }
     $("#btn-skip").disabled = true;
     later(() => { v.classList.remove("hidden"); $("#btn-restart").classList.remove("hidden"); }, ms(400));
+  }
+
+  // ---------- tema claro/escuro ----------
+  function getStoredTheme() { try { return localStorage.getItem("g0t1-theme"); } catch (e) { return null; } }
+  function storeTheme(t) { try { localStorage.setItem("g0t1-theme", t); } catch (e) { /* sem persistência: tudo bem */ } }
+  function applyTheme(t) {
+    document.body.classList.toggle("light", t === "light");
+    const ic = $("#btn-theme i");
+    if (ic) ic.className = "ti " + (t === "light" ? "ti-moon" : "ti-sun");
+  }
+  function initTheme() {
+    const t = getStoredTheme() || "dark";
+    applyTheme(t);
+    const btn = $("#btn-theme");
+    if (btn) btn.addEventListener("click", safe(() => {
+      const cur = document.body.classList.contains("light") ? "light" : "dark";
+      const nextT = cur === "light" ? "dark" : "light";
+      applyTheme(nextT); storeTheme(nextT);
+    }));
   }
 
   // ---------- wiring (com proteção) ----------
   function safe(fn) { return function () { try { fn.apply(null, arguments); } catch (e) { console.error("[G0T1]", e); } }; }
 
   function init() {
+    initTheme();
     buildModeCards();
     $("#btn-rules").addEventListener("click", safe(() => $("#rules-box").classList.toggle("hidden")));
     $("#btn-start").addEventListener("click", safe(startDraft));
